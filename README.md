@@ -1,5 +1,5 @@
-# Twitter Statuses Stream Boilerplate
-A simple node script that demonstrates connecting to Twitter's Streaming API for statuses (aka tweets). It also lends itself to easy deployment on [Heroku](https://www.heroku.com/).
+# Let Me Tweet That For You
+Powers a twitter count account that anonymously tweets the direct messages it receives.
 
 ## Requirements
 You must have [Node.js and npm installed](http://nodejs.org/).
