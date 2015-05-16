@@ -1,5 +1,5 @@
 # Let Me Tweet That For You
-Powers a twitter count account that anonymously tweets the direct messages it receives.
+Powers a twitter count account that tweets the direct messages it receives.
 
 ## Requirements
 You must have [Node.js and npm installed](http://nodejs.org/).

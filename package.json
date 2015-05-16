@@ -13,5 +13,11 @@
   "dependencies": {
     "commander": "^2.0.0",
     "twit": "^1.0.0"
-  }
+  },
+  "keywords": [
+    "twitter",
+    "secret",
+    "let me tweet that for you"
+  ],
+  "license": "MIT"
 }
