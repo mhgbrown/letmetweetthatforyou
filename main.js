@@ -14,6 +14,9 @@ var twitter = new Twit({
     access_token_secret: process.env.TWITTER_ACCESS_TOKEN_SECRET
   });
 
+var SWEEP_MESSAGES_TIMEOUT = 1000,
+  messagesToDelete = [];
+
 // Verify the credentials
 twitter.get('/account/verify_credentials', function(error, data) {
 
@@ -63,6 +66,10 @@ stream.on('direct_message', function(directMessage) {
 
     if(error) {
       console.error("message destroy: " + JSON.stringify(error));
+
+      // if we failed for some reason, add it to the queue of things to
+      // do in the future
+      messagesToDelete.push(currentMessage.id_str);
     }
 
     if(opts.verbose) {
@@ -71,6 +78,29 @@ stream.on('direct_message', function(directMessage) {
 
   });
 });
+
+var sweepMessages = function() {
+  var i = messagesToDelete.length;
+
+  if(opts.verbose) {
+    console.log("sweep messages: " + messagesToDelete.length);
+  }
+
+  while(i--) {
+    var messageId = messagesToDelete.pop();
+    twitter.post('direct_messages/destroy', { id: messageId },  function(error, data) {
+
+      if(error) {
+        console.error("sweep messages: " + JSON.stringify(error));
+
+        // put it back in the queue if it fails
+        messagesToDelete.unshift(messageId);
+      }
+    });
+  }
+};
+
+setInterval(sweepMessages, SWEEP_MESSAGES_TIMEOUT);
 
 stream.on('warning', function(warning) {
   console.warn("stream warning: " + JSON.stringify(warning));
