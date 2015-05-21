@@ -1,5 +1,5 @@
 # Let Me Tweet That For You
-Powers a twitter count account that tweets the direct messages it receives.
+This bot powers a twitter count account that tweets the direct messages it receives. The bot deletes every message after tweeting it. Messages will still appear for the sender, but the bot will not longer have it.
 
 ## Requirements
 You must have [Node.js and npm installed](http://nodejs.org/).
