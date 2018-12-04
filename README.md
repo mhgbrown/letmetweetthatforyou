@@ -1,3 +1,7 @@
+# Notice: No Longer Functional ☹️
+
+Twitter's user stream API is now deprecated, so this code does not work anymore!
+
 # Let Me Tweet That For You
 This bot powers a twitter count account that tweets the direct messages it receives. The bot deletes every message after tweeting it. Messages will still appear for the sender, but the bot will not longer have it.
 
