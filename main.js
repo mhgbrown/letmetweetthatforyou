@@ -1,5 +1,4 @@
 var Twit = require('twit'),
-  OARequest = require('twit/lib/oarequest'),
   opts = require('commander');
 
   opts.version('0.0.1')

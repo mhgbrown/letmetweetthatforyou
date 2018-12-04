@@ -2,17 +2,16 @@
   "name": "letmetweetthatforyou",
   "version": "0.0.1",
   "description": "Tweets direct messages",
-  "repository" : {
-    "type" : "git",
-    "url" : "http://github.com/mhgbrown/letmetweetthatforyou.git"
+  "repository": {
+    "type": "git",
+    "url": "http://github.com/mhgbrown/letmetweetthatforyou.git"
   },
   "engines": {
-    "node": "^6.11.1",
-    "npm": "1.4.x"
+    "node": "^8.11.1"
   },
   "dependencies": {
-    "commander": "^2.0.0",
-    "twit": "^1.0.0"
+    "commander": "^2.19.0",
+    "twit": "^2.2.11"
   },
   "keywords": [
     "twitter",
