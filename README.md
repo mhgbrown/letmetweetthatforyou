@@ -20,18 +20,22 @@ This version has been completely revived using **Twitter/X API v2** (`twitter-ap
 ## Setup & Configuration
 
 ### Prerequisites
+
 - Node.js **>= 20.6.0** and npm installed.
 - A Twitter/X Developer account.
 
 ### 1. Configure Twitter/X App Permissions (Crucial Step!)
+
 To allow the bot to read, tweet, and delete DMs, you must configure your Developer App correctly:
+
 1. Go to the [Twitter Developer Portal](https://developer.twitter.com/).
 2. Select your App, and click **User authentication settings** to edit them.
-3. Set the **App Permissions** to **"Read and Write and Direct Messages"**. *(By default, new apps are write-only, so this must be changed manually).*
+3. Set the **App Permissions** to **"Read and Write and Direct Messages"**. _(By default, new apps are write-only, so this must be changed manually)._
 4. Go to the **Keys and Tokens** tab and generate your tokens.
-   - **Note**: If you set your DM permissions *after* generating your Access Token/Secret, you **must** regenerate them so they carry the DM permissions.
+   - **Note**: If you set your DM permissions _after_ generating your Access Token/Secret, you **must** regenerate them so they carry the DM permissions.
 
 ### 2. Local Setup
+
 1. Clone the repository and install dependencies:
    ```bash
    npm install
@@ -53,19 +57,25 @@ To allow the bot to read, tweet, and delete DMs, you must configure your Develop
 ## Running the Bot Locally
 
 ### Running in Dry-Run Mode (Simulation)
+
 You can run and test the bot's entire polling, tweeting, and deleting loop completely **offline** without using live credentials:
+
 ```bash
 npm run dev -- --dry-run --verbose
 ```
 
 ### Running in Live Daemon Mode
+
 To start the bot as a continuously running local server that polls Twitter for new DMs every 60 seconds using your development credentials:
+
 ```bash
 npm run dev -- --verbose
 ```
 
 ### Single Execution Mode
+
 To poll and process pending DMs exactly once and then exit cleanly:
+
 ```bash
 npm run dev -- --once --verbose
 ```
@@ -75,7 +85,9 @@ npm run dev -- --once --verbose
 ## Development & Quality Assurance
 
 ### Code Quality (Linter & Formatter)
+
 Ensure clean, standard JavaScript code styling before pushing:
+
 ```bash
 # Check code style with ESLint
 npm run lint
@@ -85,7 +97,9 @@ npm run format
 ```
 
 ### Running Automated Tests
+
 Run the unit test suite offline using Node's native test runner:
+
 ```bash
 npm test
 ```
@@ -97,6 +111,7 @@ npm test
 This bot is fully pre-configured to run as a scheduled task every 15 minutes using GitHub Actions, costing you **$0.00/month**.
 
 ### Deployment Steps:
+
 1. **Push your code** to your personal GitHub repository.
 2. Open your repository on **GitHub.com** in your browser.
 3. Click the **Settings** tab.
@@ -113,4 +128,5 @@ This bot is fully pre-configured to run as a scheduled task every 15 minutes usi
 ---
 
 ## License
+
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

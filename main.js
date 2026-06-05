@@ -196,7 +196,11 @@ module.exports = {
   getBotIdentity,
   processDMs,
   validateCredentials,
-  setBotId: (id) => { botId = id; },
+  setBotId: (id) => {
+    botId = id;
+  },
   getBotId: () => botId,
-  setClient: (mockClient) => { client = mockClient; }
+  setClient: (mockClient) => {
+    client = mockClient;
+  },
 };
