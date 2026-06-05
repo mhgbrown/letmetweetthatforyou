@@ -1,119 +1,188 @@
-var Twit = require('twit'),
-  opts = require('commander');
+const { TwitterApi } = require('twitter-api-v2');
 
-  opts.version('0.0.1')
-  .option('-v, --verbose', 'Log some debug info to the console')
-  .parse(process.argv);
+// Parse command line arguments simply and natively
+const args = process.argv.slice(2);
+const verbose = args.includes('--verbose') || args.includes('-v');
+const dryRun = args.includes('--dry-run') || args.includes('-d');
+const once = args.includes('--once') || args.includes('-1');
 
-// Initialize Twitter API keys
-var twitter = new Twit({
-    consumer_key: process.env.TWITTER_CONSUMER_KEY,
-    consumer_secret: process.env.TWITTER_CONSUMER_SECRET,
-    access_token: process.env.TWITTER_ACCESS_TOKEN_KEY,
-    access_token_secret: process.env.TWITTER_ACCESS_TOKEN_SECRET
+const SWEEP_INTERVAL = 60000; // Poll every 60 seconds
+
+// Logger helper
+function log(...msg) {
+  if (verbose || dryRun) {
+    console.log(`[${new Date().toISOString()}]`, ...msg);
+  }
+}
+
+function logError(...msg) {
+  console.error(`[${new Date().toISOString()}] ERROR:`, ...msg);
+}
+
+// Validation helper for credentials
+function validateCredentials() {
+  if (dryRun) return true;
+
+  const required = [
+    'TWITTER_CONSUMER_KEY',
+    'TWITTER_CONSUMER_SECRET',
+    'TWITTER_ACCESS_TOKEN_KEY',
+    'TWITTER_ACCESS_TOKEN_SECRET',
+  ];
+
+  const missing = required.filter((key) => !process.env[key]);
+  if (missing.length > 0) {
+    logError(`Missing required environment variables: ${missing.join(', ')}`);
+    process.exit(1);
+  }
+}
+
+validateCredentials();
+
+// Initialize client (or mock in dry run)
+let client;
+let botId = null;
+
+if (!dryRun) {
+  client = new TwitterApi({
+    appKey: process.env.TWITTER_CONSUMER_KEY,
+    appSecret: process.env.TWITTER_CONSUMER_SECRET,
+    accessToken: process.env.TWITTER_ACCESS_TOKEN_KEY,
+    accessSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET,
   });
+}
 
-var SWEEP_MESSAGES_TIMEOUT = 1000,
-  messagesToDelete = [];
-
-// Verify the credentials
-twitter.get('/account/verify_credentials', function(error, data) {
-
-  // if there was an error authenticating, bail
-  if(error) {
-    console.error(JSON.stringify(error));
-    throw error;
-  }
-
-  if(opts.verbose) {
-    console.log("credential verification: " + JSON.stringify(data));
-  }
-
-});
-
-var stream = twitter.stream('user');
-
-stream.on('direct_message', function(directMessage) {
-  var currentMessage = directMessage.direct_message;
-
-  if(opts.verbose) {
-    console.log(JSON.stringify(currentMessage));
-  }
-
-  // bail if there is no direct message to check out
-  if(!currentMessage) {
-    console.warn("no message to read");
+// Fetch Bot identity to avoid processing self-sent DMs
+async function getBotIdentity() {
+  if (dryRun) {
+    botId = 'MOCK_BOT_12345';
+    log(`Dry Run: Mock bot identity set to ${botId}`);
     return;
   }
 
-  // tweet the message
-  twitter.post('statuses/update', { status: currentMessage.text, possibly_sensitive: true },  function(error, tweet) {
+  try {
+    const me = await client.v2.me();
+    botId = me.data.id;
+    log(`Authenticated successfully as @${me.data.username} (ID: ${botId})`);
+  } catch (error) {
+    logError('Failed to verify credentials / fetch bot identity:', error);
+    throw error;
+  }
+}
 
-    if(error) {
-      console.error("status update: " + JSON.stringify(error));
+// Core processing function
+async function processDMs() {
+  log('Checking for new Direct Messages...');
+
+  let events = [];
+
+  if (dryRun) {
+    // Mock incoming messages for dry-run testing
+    log('Dry Run: Simulating incoming Direct Messages.');
+    events = [
+      {
+        id: 'mock_dm_001',
+        event_type: 'MessageCreate',
+        sender_id: 'mock_user_abc',
+        text: 'This is a mock tweet from dry-run mode! ' + Math.floor(Math.random() * 1000),
+      },
+    ];
+  } else {
+    try {
+      const dmPage = await client.v2.listDmEvents({
+        'dm_event.fields': ['id', 'text', 'sender_id', 'event_type'],
+        max_results: 50,
+      });
+      events = dmPage.events || [];
+    } catch (error) {
+      logError('Failed to fetch DM events from Twitter API:', error);
+      return;
     }
-
-    if(opts.verbose) {
-      console.log(JSON.stringify(tweet));
-    }
-
-  });
-
-  // delete the message
-  // NOTE: funny that id_str is the actual id of the message
-  twitter.post('direct_messages/destroy', { id: currentMessage.id_str },  function(error, data) {
-
-    if(error) {
-      console.error("message destroy: " + JSON.stringify(error));
-
-      // if we failed for some reason, add it to the queue of things to
-      // do in the future
-      messagesToDelete.push(currentMessage.id_str);
-    }
-
-    if(opts.verbose) {
-      console.log(JSON.stringify(data));
-    }
-
-  });
-});
-
-var sweepMessages = function() {
-  var i = messagesToDelete.length;
-
-  if(opts.verbose) {
-    console.log("sweep messages: " + messagesToDelete.length);
   }
 
-  while(i--) {
-    var messageId = messagesToDelete.pop();
-    twitter.post('direct_messages/destroy', { id: messageId },  function(error, data) {
+  log(`Retrieved ${events.length} DM events to analyze.`);
 
-      if(error) {
-        console.error("sweep messages: " + JSON.stringify(error));
+  for (const event of events) {
+    // Only process MessageCreate type events
+    if (event.event_type !== 'MessageCreate') {
+      log(`Skipping non-MessageCreate event: ${event.id} (type: ${event.event_type})`);
+      continue;
+    }
 
-        // put it back in the queue if it fails
-        messagesToDelete.unshift(messageId);
+    // Skip messages sent by the bot itself to prevent infinite feedback loops
+    if (event.sender_id === botId) {
+      log(`Skipping self-sent message: ${event.id}`);
+      continue;
+    }
+
+    const tweetText = event.text;
+    log(`Processing DM ID ${event.id}: "${tweetText}"`);
+
+    // 1. Tweet the DM text
+    let tweetSuccess = false;
+    if (dryRun) {
+      log(`Dry Run [TWEET SUCCESS]: Simulated tweet of "${tweetText}"`);
+      tweetSuccess = true;
+    } else {
+      try {
+        const tweet = await client.v2.tweet(tweetText);
+        log(`Successfully tweeted DM ${event.id}. Tweet ID: ${tweet.data.id}`);
+        tweetSuccess = true;
+      } catch (error) {
+        logError(`Failed to tweet DM ${event.id}:`, error);
       }
-    });
+    }
+
+    // 2. Delete the DM if tweet succeeded (or if dry-run) to clean queue
+    if (tweetSuccess) {
+      if (dryRun) {
+        log(`Dry Run [DELETE SUCCESS]: Simulated deletion of DM ${event.id}`);
+      } else {
+        try {
+          // Deletes the DM event from the conversation for the bot
+          // Note: Twitter API v2 allows deleting DM events using the event ID
+          await client.v2.deleteDmEvent(event.id);
+          log(`Successfully deleted DM ${event.id} from queue.`);
+        } catch (error) {
+          logError(`Failed to delete DM ${event.id} (will retry in next sweep):`, error);
+        }
+      }
+    }
   }
-};
 
-setInterval(sweepMessages, SWEEP_MESSAGES_TIMEOUT);
+  log('Finished processing DMs.');
+}
 
-stream.on('warning', function(warning) {
-  console.warn("stream warning: " + JSON.stringify(warning));
-});
+// Main execution block
+async function main() {
+  try {
+    await getBotIdentity();
+  } catch (error) {
+    process.exit(1);
+  }
 
-stream.on('disconnect', function(disconnect) {
-  console.error("stream disconnect: " + JSON.stringify(disconnect));
-});
+  if (once) {
+    log('Running in single-execution mode (--once)...');
+    await processDMs();
+    log('Done! Exiting single-execution mode.');
+    process.exit(0);
+  }
 
-// Handle exit signals
-process.on('SIGINT', function() {
-  process.exit(1);
-});
+  log(`Starting daemon mode (polling every ${SWEEP_INTERVAL / 1000} seconds)...`);
+  // Process immediately on start, then start polling interval
+  await processDMs();
+  const intervalId = setInterval(processDMs, SWEEP_INTERVAL);
 
-process.on('exit', function() {
-  console.log("Exiting...");
-});
+  // Handle termination signals cleanly
+  const shutdown = () => {
+    log('Shutting down bot daemon...');
+    clearInterval(intervalId);
+    log('Exited.');
+    process.exit(0);
+  };
+
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
+}
+
+main();
