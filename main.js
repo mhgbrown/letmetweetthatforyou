@@ -185,4 +185,15 @@ async function main() {
   process.on('SIGTERM', shutdown);
 }
 
-main();
+if (require.main === module) {
+  main();
+}
+
+module.exports = {
+  getBotIdentity,
+  processDMs,
+  validateCredentials,
+  setBotId: (id) => { botId = id; },
+  getBotId: () => botId,
+  setClient: (mockClient) => { client = mockClient; }
+};
