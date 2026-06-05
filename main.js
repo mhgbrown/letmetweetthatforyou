@@ -160,6 +160,7 @@ async function main() {
   try {
     await getBotIdentity();
   } catch (error) {
+    logError('Bot startup failed:', error);
     process.exit(1);
   }
 
