@@ -37,19 +37,19 @@ function validateCredentials() {
   }
 }
 
-validateCredentials();
-
 // Initialize client (or mock in dry run)
 let client;
 let botId = null;
 
-if (!dryRun) {
-  client = new TwitterApi({
-    appKey: process.env.TWITTER_CONSUMER_KEY,
-    appSecret: process.env.TWITTER_CONSUMER_SECRET,
-    accessToken: process.env.TWITTER_ACCESS_TOKEN_KEY,
-    accessSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET,
-  });
+function initializeClient() {
+  if (!dryRun && !client) {
+    client = new TwitterApi({
+      appKey: process.env.TWITTER_CONSUMER_KEY,
+      appSecret: process.env.TWITTER_CONSUMER_SECRET,
+      accessToken: process.env.TWITTER_ACCESS_TOKEN_KEY,
+      accessSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET,
+    });
+  }
 }
 
 // Fetch Bot identity to avoid processing self-sent DMs
@@ -155,6 +155,8 @@ async function processDMs() {
 
 // Main execution block
 async function main() {
+  validateCredentials();
+  initializeClient();
   try {
     await getBotIdentity();
   } catch (error) {
