@@ -140,8 +140,7 @@ async function processDMs() {
       } else {
         try {
           // Deletes the DM event from the conversation for the bot
-          // Note: Twitter API v2 allows deleting DM events using the event ID
-          await client.v2.deleteDmEvent(event.id);
+          await client.v1.deleteDm(event.id);
           log(`Successfully deleted DM ${event.id} from queue.`);
         } catch (error) {
           logError(`Failed to delete DM ${event.id} (will retry in next sweep):`, error);

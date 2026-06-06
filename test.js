@@ -32,6 +32,12 @@ test('Twitter/X Bot Unit Tests', async (t) => {
     let deleteDmEventCalledWith = null;
 
     const mockClient = {
+      v1: {
+        deleteDm: async (id) => {
+          deleteDmEventCalledWith = id;
+          return { success: true };
+        },
+      },
       v2: {
         listDmEvents: async () => ({
           events: [
@@ -46,10 +52,6 @@ test('Twitter/X Bot Unit Tests', async (t) => {
         tweet: async (text) => {
           tweetCalledWith = text;
           return { data: { id: 'tweet_id_111' } };
-        },
-        deleteDmEvent: async (id) => {
-          deleteDmEventCalledWith = id;
-          return { success: true };
         },
       },
     };
@@ -68,6 +70,12 @@ test('Twitter/X Bot Unit Tests', async (t) => {
     let deleteCalled = false;
 
     const mockClient = {
+      v1: {
+        deleteDm: async () => {
+          deleteCalled = true;
+          return { success: true };
+        },
+      },
       v2: {
         listDmEvents: async () => ({
           events: [
@@ -82,10 +90,6 @@ test('Twitter/X Bot Unit Tests', async (t) => {
         tweet: async () => {
           tweetCalled = true;
           return { data: {} };
-        },
-        deleteDmEvent: async () => {
-          deleteCalled = true;
-          return { success: true };
         },
       },
     };
