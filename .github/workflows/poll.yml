@@ -2,8 +2,8 @@ name: Poll and Tweet DMs
 
 on:
   schedule:
-    # Run every 15 minutes (completely free on GitHub Actions)
-    - cron: '*/15 * * * *'
+    # Run every 5 minutes (completely free on GitHub Actions since repository is public)
+    - cron: '*/5 * * * *'
   workflow_dispatch: # Allows manual trigger from the GitHub Actions UI
 
 env:
