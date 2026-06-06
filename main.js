@@ -8,6 +8,39 @@ const once = args.includes('--once') || args.includes('-1');
 
 const SWEEP_INTERVAL = 60000; // Poll every 60 seconds
 
+// Rate limit settings from environment variables with safe defaults
+const RATE_LIMIT_USER_MAX_TWEETS = parseInt(process.env.RATE_LIMIT_USER_MAX_TWEETS || '5', 10);
+const RATE_LIMIT_USER_WINDOW_MS = parseInt(process.env.RATE_LIMIT_USER_WINDOW_MS || '86400000', 10); // Default: 24 hours
+const RATE_LIMIT_GLOBAL_MAX_TWEETS_PER_RUN = parseInt(
+  process.env.RATE_LIMIT_GLOBAL_MAX_TWEETS_PER_RUN || '50',
+  10
+);
+
+// In-memory tracker for rate limiting
+const userTweetHistory = {}; // Maps sender_id to array of timestamp numbers (ms)
+
+function isUserRateLimited(senderId) {
+  const now = Date.now();
+  if (!userTweetHistory[senderId]) {
+    userTweetHistory[senderId] = [];
+    return false;
+  }
+
+  // Filter out timestamps older than the window
+  userTweetHistory[senderId] = userTweetHistory[senderId].filter(
+    (timestamp) => now - timestamp < RATE_LIMIT_USER_WINDOW_MS
+  );
+
+  return userTweetHistory[senderId].length >= RATE_LIMIT_USER_MAX_TWEETS;
+}
+
+function recordUserTweet(senderId) {
+  if (!userTweetHistory[senderId]) {
+    userTweetHistory[senderId] = [];
+  }
+  userTweetHistory[senderId].push(Date.now());
+}
+
 // Logger helper
 function log(...msg) {
   if (verbose || dryRun) {
@@ -179,17 +212,38 @@ async function processDMs() {
 
   log(`Identified ${dmsToTweet.length} new DM(s) to tweet.`);
 
+  let tweetsSentThisRun = 0;
+
   for (const event of dmsToTweet) {
+    if (tweetsSentThisRun >= RATE_LIMIT_GLOBAL_MAX_TWEETS_PER_RUN) {
+      log(
+        `Reached global rate limit for this run (${RATE_LIMIT_GLOBAL_MAX_TWEETS_PER_RUN} tweets). Throttling remaining DMs.`
+      );
+      break;
+    }
+
     const tweetText = event.text;
+    const senderId = event.sender_id;
+
+    if (isUserRateLimited(senderId)) {
+      log(`Skipping DM ID ${event.id} from sender ${senderId} due to user rate limit.`);
+      continue;
+    }
+
     log(`Processing DM ID ${event.id}: "${tweetText}"`);
 
     // Tweet the DM text
     if (dryRun) {
       log(`Dry Run [TWEET SUCCESS]: Simulated tweet of "${tweetText}"`);
+      recordUserTweet(senderId);
+      tweetsSentThisRun++;
     } else {
       try {
         const tweet = await client.v2.tweet(tweetText);
         log(`Successfully tweeted DM ${event.id}. Tweet ID: ${tweet.data.id}`);
+
+        recordUserTweet(senderId);
+        tweetsSentThisRun++;
 
         // Update the tracked state so subsequent iterations / runs are in sync
         lastTweetText = tweetText;
@@ -263,4 +317,13 @@ module.exports = {
   setClient: (mockClient) => {
     client = mockClient;
   },
+  getUserTweetHistory: () => userTweetHistory,
+  clearUserTweetHistory: () => {
+    for (const key in userTweetHistory) {
+      delete userTweetHistory[key];
+    }
+  },
+  RATE_LIMIT_USER_MAX_TWEETS,
+  RATE_LIMIT_USER_WINDOW_MS,
+  RATE_LIMIT_GLOBAL_MAX_TWEETS_PER_RUN,
 };

@@ -8,6 +8,8 @@ const {
   setLastTweetText,
   setLastTweetTime,
   setClient,
+  RATE_LIMIT_USER_MAX_TWEETS,
+  RATE_LIMIT_GLOBAL_MAX_TWEETS_PER_RUN,
 } = require('./main.js');
 
 test('Twitter/X Bot Unit Tests', async (t) => {
@@ -204,4 +206,87 @@ test('Twitter/X Bot Unit Tests', async (t) => {
       assert.strictEqual(tweetsCalledWith[0], 'Newest DM!', 'Should process the newest DM');
     }
   );
+
+  await t.test('processDMs respects user-level rate limiting', async () => {
+    const tweetsCalledWith = [];
+    const senderId = 'spammer_123';
+
+    const mockClient = {
+      v2: {
+        listDmEvents: async () => {
+          const events = [];
+          for (let i = 0; i < RATE_LIMIT_USER_MAX_TWEETS + 2; i++) {
+            events.push({
+              id: `dm_${i}`,
+              event_type: 'MessageCreate',
+              sender_id: senderId,
+              text: `Spam DM ${i}!`,
+              created_at: new Date(Date.now() + i * 1000).toISOString(),
+            });
+          }
+          return { events };
+        },
+        tweet: async (text) => {
+          tweetsCalledWith.push(text);
+          return { data: { id: `tweet_${tweetsCalledWith.length}` } };
+        },
+      },
+    };
+
+    setClient(mockClient);
+    setBotId('bot_id_123');
+    setLastTweetText('Initial last tweet');
+    setLastTweetTime(new Date(Date.now() - 10000));
+    const { clearUserTweetHistory } = require('./main.js');
+    clearUserTweetHistory();
+
+    await processDMs();
+
+    assert.strictEqual(
+      tweetsCalledWith.length,
+      RATE_LIMIT_USER_MAX_TWEETS,
+      `Should limit the user to at most ${RATE_LIMIT_USER_MAX_TWEETS} tweets`
+    );
+  });
+
+  await t.test('processDMs respects global run-level rate limiting', async () => {
+    const tweetsCalledWith = [];
+
+    const mockClient = {
+      v2: {
+        listDmEvents: async () => {
+          const events = [];
+          for (let i = 0; i < RATE_LIMIT_GLOBAL_MAX_TWEETS_PER_RUN + 5; i++) {
+            events.push({
+              id: `dm_global_${i}`,
+              event_type: 'MessageCreate',
+              sender_id: `user_diff_${i}`,
+              text: `Tweet ${i}!`,
+              created_at: new Date(Date.now() + i * 1000).toISOString(),
+            });
+          }
+          return { events };
+        },
+        tweet: async (text) => {
+          tweetsCalledWith.push(text);
+          return { data: { id: `tweet_global_${tweetsCalledWith.length}` } };
+        },
+      },
+    };
+
+    setClient(mockClient);
+    setBotId('bot_id_123');
+    setLastTweetText('Initial last tweet');
+    setLastTweetTime(new Date(Date.now() - 10000));
+    const { clearUserTweetHistory } = require('./main.js');
+    clearUserTweetHistory();
+
+    await processDMs();
+
+    assert.strictEqual(
+      tweetsCalledWith.length,
+      RATE_LIMIT_GLOBAL_MAX_TWEETS_PER_RUN,
+      `Should limit total tweets in a run to at most ${RATE_LIMIT_GLOBAL_MAX_TWEETS_PER_RUN}`
+    );
+  });
 });
