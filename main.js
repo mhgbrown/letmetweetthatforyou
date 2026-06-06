@@ -40,6 +40,8 @@ function validateCredentials() {
 // Initialize client (or mock in dry run)
 let client;
 let botId = null;
+let lastTweetText = null;
+let lastTweetTime = null;
 
 function initializeClient() {
   if (!dryRun && !client) {
@@ -70,6 +72,33 @@ async function getBotIdentity() {
   }
 }
 
+// Fetch the bot's own last tweet to establish state tracking
+async function fetchLastTweet() {
+  if (dryRun) {
+    lastTweetText = 'This is a mock tweet from dry-run mode!';
+    lastTweetTime = new Date();
+    return;
+  }
+
+  try {
+    const timeline = await client.v2.userTimeline(botId, {
+      max_results: 5,
+      'tweet.fields': ['created_at', 'text'],
+    });
+
+    if (timeline && timeline.tweets && timeline.tweets.length > 0) {
+      const lastTweet = timeline.tweets[0];
+      lastTweetText = lastTweet.text;
+      lastTweetTime = new Date(lastTweet.created_at);
+      log(`Fetched last tweet: "${lastTweetText}" (created_at: ${lastTweetTime.toISOString()})`);
+    } else {
+      log('No previous tweets found in timeline (fresh account).');
+    }
+  } catch (error) {
+    logError('Failed to fetch user timeline / last tweet:', error);
+  }
+}
+
 // Core processing function
 async function processDMs() {
   log('Checking for new Direct Messages...');
@@ -85,12 +114,13 @@ async function processDMs() {
         event_type: 'MessageCreate',
         sender_id: 'mock_user_abc',
         text: 'This is a mock tweet from dry-run mode! ' + Math.floor(Math.random() * 1000),
+        created_at: new Date().toISOString(),
       },
     ];
   } else {
     try {
       const dmPage = await client.v2.listDmEvents({
-        'dm_event.fields': ['id', 'text', 'sender_id', 'event_type'],
+        'dm_event.fields': ['id', 'text', 'sender_id', 'event_type', 'created_at'],
         max_results: 50,
       });
       events = dmPage.events || [];
@@ -101,6 +131,8 @@ async function processDMs() {
   }
 
   log(`Retrieved ${events.length} DM events to analyze.`);
+
+  const dmsToTweet = [];
 
   for (const event of events) {
     // Only process MessageCreate type events
@@ -115,36 +147,55 @@ async function processDMs() {
       continue;
     }
 
+    // Stop if we hit a DM that matches our last tweet's text (meaning we processed this and everything older)
+    if (lastTweetText && event.text === lastTweetText) {
+      log(`Found DM matching last tweet text: "${event.text}". Stopping older DM processing.`);
+      break;
+    }
+
+    // Stop if we hit a DM received before or at the same time as our last tweet
+    if (lastTweetTime && new Date(event.created_at) <= lastTweetTime) {
+      log(
+        `Found DM received at/before last tweet time (${event.created_at} <= ${lastTweetTime.toISOString()}). Stopping older DM processing.`
+      );
+      break;
+    }
+
+    dmsToTweet.push(event);
+  }
+
+  // If no tweets exist yet, only process the single most recent DM to establish initial state
+  if (!lastTweetTime && dmsToTweet.length > 1) {
+    log(
+      'Fresh account (no previous tweets). Only processing the single most recent DM to establish timeline.'
+    );
+    const mostRecent = dmsToTweet[0]; // First in list is the newest
+    dmsToTweet.length = 0;
+    dmsToTweet.push(mostRecent);
+  }
+
+  // Reverse to process in chronological order (oldest first)
+  dmsToTweet.reverse();
+
+  log(`Identified ${dmsToTweet.length} new DM(s) to tweet.`);
+
+  for (const event of dmsToTweet) {
     const tweetText = event.text;
     log(`Processing DM ID ${event.id}: "${tweetText}"`);
 
-    // 1. Tweet the DM text
-    let tweetSuccess = false;
+    // Tweet the DM text
     if (dryRun) {
       log(`Dry Run [TWEET SUCCESS]: Simulated tweet of "${tweetText}"`);
-      tweetSuccess = true;
     } else {
       try {
         const tweet = await client.v2.tweet(tweetText);
         log(`Successfully tweeted DM ${event.id}. Tweet ID: ${tweet.data.id}`);
-        tweetSuccess = true;
+
+        // Update the tracked state so subsequent iterations / runs are in sync
+        lastTweetText = tweetText;
+        lastTweetTime = new Date();
       } catch (error) {
         logError(`Failed to tweet DM ${event.id}:`, error);
-      }
-    }
-
-    // 2. Delete the DM if tweet succeeded (or if dry-run) to clean queue
-    if (tweetSuccess) {
-      if (dryRun) {
-        log(`Dry Run [DELETE SUCCESS]: Simulated deletion of DM ${event.id}`);
-      } else {
-        try {
-          // Deletes the DM event from the conversation for the bot
-          await client.v1.deleteDm(event.id);
-          log(`Successfully deleted DM ${event.id} from queue.`);
-        } catch (error) {
-          logError(`Failed to delete DM ${event.id} (will retry in next sweep):`, error);
-        }
       }
     }
   }
@@ -158,6 +209,7 @@ async function main() {
   initializeClient();
   try {
     await getBotIdentity();
+    await fetchLastTweet();
   } catch (error) {
     logError('Bot startup failed:', error);
     process.exit(1);
@@ -193,12 +245,21 @@ if (require.main === module) {
 
 module.exports = {
   getBotIdentity,
+  fetchLastTweet,
   processDMs,
   validateCredentials,
   setBotId: (id) => {
     botId = id;
   },
   getBotId: () => botId,
+  setLastTweetText: (text) => {
+    lastTweetText = text;
+  },
+  getLastTweetText: () => lastTweetText,
+  setLastTweetTime: (time) => {
+    lastTweetTime = time;
+  },
+  getLastTweetTime: () => lastTweetTime,
   setClient: (mockClient) => {
     client = mockClient;
   },
